@@ -114,7 +114,7 @@ function FormFlowAccountUser() {
 
     try {
       // 3. CHAMA O SEU BACKEND (NESTJS)
-      const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app', {
+      const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
