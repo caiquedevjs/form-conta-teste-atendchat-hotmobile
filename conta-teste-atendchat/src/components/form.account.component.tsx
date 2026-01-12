@@ -13,6 +13,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Ícone de suce
 
 function FormFlowAccountUser() {
 
+  const API_URL = '/api';
+
   const [loading, setLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(0); // 0 = Conta, 1 = Usuário
   const [createdAccountId, setCreatedAccountId] = useState<number | null>(null); // Guarda o ID da conta criada
@@ -114,7 +116,7 @@ function FormFlowAccountUser() {
 
     try {
       // 3. CHAMA O SEU BACKEND (NESTJS)
-      const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account', {
+      const response = await fetch(`${API_URL}/account`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

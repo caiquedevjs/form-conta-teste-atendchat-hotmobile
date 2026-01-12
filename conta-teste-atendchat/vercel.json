@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/:path*"
+    }
+  ]
+}
