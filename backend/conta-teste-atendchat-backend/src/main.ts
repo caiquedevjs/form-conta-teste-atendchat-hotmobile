@@ -10,11 +10,10 @@ async function bootstrap() {
 
   // 2. ATIVANDO O CORS AQUI
 // 2. CORREÇÃO DO CORS
-  app.enableCors({
-    // Copie EXATAMENTE como aparece no navegador (sem a barra / no final)
-    origin: 'https://form-conta-teste-atendchat-hotmobil.vercel.app', 
+ app.enableCors({
+    origin: '*',            // Aceita qualquer site (Vercel, Localhost, etc)
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
+    credentials: false,     // <--- IMPORTANTE: Tem que ser false quando usa '*'
   });
   await app.listen(process.env.PORT || 3000);
   console.log(`Application is running on: ${await app.getUrl()}`);
