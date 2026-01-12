@@ -9,17 +9,11 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe());
 
   // 2. ATIVANDO O CORS AQUI
-  app.enableCors({
-    // Permite apenas o seu Frontend (Vite geralmente roda na 5173)
-    origin: '*',
-
-    // Métodos permitidos
+app.enableCors({
+    origin: '*', 
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-
-    // Permite enviar cookies/headers de autorização se precisar no futuro
-    credentials: true,
+    credentials: false, // <--- Mude para false ou remova essa linha
   });
-
   await app.listen(process.env.PORT || 3000);
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
