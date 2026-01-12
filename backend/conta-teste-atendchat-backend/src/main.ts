@@ -12,7 +12,7 @@ async function bootstrap() {
 app.enableCors({
     origin: '*', 
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: false, // <--- Mude para false ou remova essa linha
+    
   });
   await app.listen(process.env.PORT || 3000);
   console.log(`Application is running on: ${await app.getUrl()}`);
