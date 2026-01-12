@@ -174,7 +174,7 @@ function FormFlowAccountUser() {
 
     try {
       // Chama a mesma rota de antes, mas agora o Backend faz o serviço completo
-      const response = await fetch('http://localhost:3000/account/user', {
+      const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userPayload)
