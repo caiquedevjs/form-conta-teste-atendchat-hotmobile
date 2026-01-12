@@ -11,16 +11,17 @@ async function bootstrap() {
   // 2. ATIVANDO O CORS AQUI
   app.enableCors({
     // Permite apenas o seu Frontend (Vite geralmente roda na 5173)
-    origin: '*', 
-    
+    origin: '*',
+
     // Métodos permitidos
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    
+
     // Permite enviar cookies/headers de autorização se precisar no futuro
-    credentials: true, 
+    credentials: true,
   });
 
   await app.listen(3000);
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
+// eslint-disable-next-line @typescript-eslint/no-floating-promises
 bootstrap();

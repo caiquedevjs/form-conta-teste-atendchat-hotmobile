@@ -147,7 +147,7 @@ function FormFlowAccountUser() {
 
   // --- LÓGICA DO PASSO 2: CRIAR USUÁRIO E VINCULAR ---
   const handleCreateUser = async () => {
-    // Validação Passo 2
+    // 1. Validações (Mantidas)
     if (!formData.password || !formData.confirmPassword) {
       toast.warn("Defina e confirme a senha.");
       return;
@@ -163,34 +163,42 @@ function FormFlowAccountUser() {
 
     setLoading(true);
 
-    try {
-      // Nota: Quando tiver o NestJS, você enviará tudo de uma vez.
-      // Por enquanto, no front, simulamos a chamada do User.
-      
-      const userPayload = {
+    // 2. Payload Ajustado (Sem role, pois isso é no próximo passo)
+    const userPayload = {
+        accountId: createdAccountId,
         name: formData.responsavel,
         email: formData.mail,
-        password: formData.password,
-        role: "administrator"
-        // No fluxo real da API Platform, você cria o user e depois vincula à conta ID
-      };
+        password: formData.password
+        // role: "administrator" <--- REMOVIDO (Isso vai no Passo 3)
+    };
 
-      // FAKE FETCH para simular a criação do usuário (substitua pela sua rota real depois)
-      // const responseUser = await fetch('/api-hotmobile/platform/api/v1/users', ... );
-      
-      // Simulação de sucesso
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast.success("Usuário Admin criado com sucesso!");
-      toast.info("Redirecionando para o login...");
+    try {
+      // Chama a mesma rota de antes, mas agora o Backend faz o serviço completo
+      const response = await fetch('http://localhost:3000/account/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userPayload)
+      });
+
+      if (response.ok) {
+        // SUCESSO TOTAL!
+        toast.success("Conta e Usuário Admin configurados!");
+        toast.info("Você já pode fazer login.");
+        
+       
+        
+      } else {
+        const error = await response.json();
+        toast.error("Erro: " + (error.message || "Falha ao finalizar cadastro."));
+      }
 
     } catch (err) {
-      toast.error("Erro ao criar usuário.");
+      console.error(err);
+      toast.error("Erro de conexão.");
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto' }}>
       <ToastContainer />

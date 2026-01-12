@@ -3,12 +3,12 @@ import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
 import { createAccountService } from './create.account.service';
 import { AccountsController } from './create.account.controller';
-
+import { WhatsappService } from './whatsapp.service';
 
 @Module({
   imports: [HttpModule, ConfigModule], // <--- IMPORTANTE
   controllers: [AccountsController],
-  providers: [createAccountService],
-  exports: [createAccountService] // Exportamos caso outro módulo precise criar contas
+  providers: [createAccountService, WhatsappService],
+  exports: [createAccountService], // Exportamos caso outro módulo precise criar contas
 })
 export class AccountsModule {}

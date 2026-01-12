@@ -1,6 +1,9 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { Controller, Post, Body } from '@nestjs/common';
 import { CreateAccountDto } from './dto/create.account.dto';
 import { createAccountService } from './create.account.service';
+import { CreateUserDto } from './dto/create.user.dto';
 
 @Controller('account')
 export class AccountsController {
@@ -9,5 +12,10 @@ export class AccountsController {
   @Post()
   async create(@Body() createAccountDto: CreateAccountDto) {
     return this.accountsService.createChatWhootAccount(createAccountDto);
+  }
+
+  @Post('user')
+  async createUser(@Body() createUserDto: CreateUserDto) {
+    return this.accountsService.createChatwootUser(createUserDto);
   }
 }
