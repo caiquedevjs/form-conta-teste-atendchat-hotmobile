@@ -15,7 +15,7 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: false,     // <--- IMPORTANTE: Tem que ser false quando usa '*'
   });
-  await app.listen(process.env.PORT || 3000);
+  await app.listen(process.env.PORT || 3000,'0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
