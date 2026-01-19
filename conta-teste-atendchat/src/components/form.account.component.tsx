@@ -2,7 +2,6 @@ import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import Link from '@mui/material/Link';
 import { useState } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -105,14 +104,16 @@ function FormFlowAccountUser() {
     // 2. PREPARA O PAYLOAD PARA O NESTJS
     // Note que agora enviamos os nomes que definimos no DTO do NestJS
     // Não precisa mais converter para 'domain', 'locale', etc. O Back faz isso.
-    const nestPayload = {
+   const nestPayload = {
+      accountId: Number(createdAccountId),
+      name: formData.responsavel,
+      email: formData.mail,
+      password: formData.password,
+      
+      // ADICIONE ESTAS DUAS LINHAS ABAIXO:
       empresa: formData.empresa,
-      mail: formData.mail,
-      responsavel: formData.responsavel,
-      telefone: formData.telefone,
-      // Se quiser passar limites personalizados, passe aqui:
-      // limitAgents: 5
-    };
+      telefone: formData.celular || formData.telefone 
+  };
 
     try {
       // 3. CHAMA O SEU BACKEND (NESTJS)
