@@ -16,6 +16,14 @@ export class AccountsController {
 
   @Post('user')
   async createUser(@Body() createUserDto: CreateUserDto) {
-    return this.accountsService.createChatwootUser(createUserDto);
+    // PASSANDO OS 3 ARGUMENTOS EXIGIDOS PELO SERVICE:
+    // 1. O DTO completo
+    // 2. A empresa (para o e-mail/whats)
+    // 3. O telefone (para o whats)
+    return this.accountsService.createChatwootUser(
+      createUserDto, 
+      createUserDto.empresa, 
+      createUserDto.telefone
+    );
   }
 }
