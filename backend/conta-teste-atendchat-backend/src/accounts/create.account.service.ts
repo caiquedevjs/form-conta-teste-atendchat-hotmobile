@@ -37,37 +37,7 @@ export class createAccountService {
         agents: agentsLimit,
         inboxes: inboxesLimit,
       },
-      features: {
-        agent_bots: true,
-        typebot_bots: true,
-        agent_management: true,
-        team_management: true,
-        inbox_management: true,
-        integrations: true,
-        automations: true,
-        custom_attributes: true,
-        canned_responses: true,
-        macros: true,
-        reports: true,
-        campaigns: true,
-        crm: true,
-        n8n_integration: true,
-        asaas_integration: true,
-        kanban: true,
-        wavoip_integration: true,
-        whatsapp_messaging_group: true,
-        typebot_integration: true,
-        rdstation_integration: true,
-        groq_integration: true,
-        perfex_integration: true,
-        standalone_apps_integration: true,
-        schedule_messages_integration: true,
-        chatwoot_v4: true,
-        account_open_ai_api_key_enabled: true,
-        voice_recorder: true,
-        help_center: true,
-        disable_branding: true 
-      },
+     
     };
 
     try {
