@@ -205,7 +205,7 @@ function FormFlowAccountUser() {
     <Box sx={{ maxWidth: 800, mx: 'auto' }}>
       <ToastContainer />
 
-      {/* --- PASSO 1: DADOS DA CONTA (Sempre visível, mas desabilita após sucesso) --- */}
+      {/* -- PASSO 1: DADOS DA CONTA (Sempre visível, mas desabilita após sucesso) -- */}
       <Box
         component="form"
         sx={{
