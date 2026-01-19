@@ -3,20 +3,33 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
+  // 1. Cria a aplicação
   const app = await NestFactory.create(AppModule);
 
-  // 1. Validação global (já havíamos configurado)
-  app.useGlobalPipes(new ValidationPipe());
-
-  // 2. ATIVANDO O CORS AQUI
-// 2. CORREÇÃO DO CORS
- app.enableCors({
-    origin: '*',            // Aceita qualquer site (Vercel, Localhost, etc)
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: false,     // <--- IMPORTANTE: Tem que ser false quando usa '*'
+  // 2. Configura o CORS (Antes de qualquer outra coisa)
+  app.enableCors({
+    origin: '*', // Como é um form público, mantemos o '*'
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: false,
+    optionsSuccessStatus: 204, // MUITO IMPORTANTE para navegadores modernos
   });
-  await app.listen(process.env.PORT || 3000,'0.0.0.0');
-  console.log(`Application is running on: ${await app.getUrl()}`);
+
+  // 3. Validação global
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+  }));
+
+  // 4. Escuta na porta correta e no HOST correto
+  const port = process.env.PORT || 3000;
+  
+  // Forçamos o 0.0.0.0 para o Railway conseguir repassar o tráfego
+  await app.listen(port, '0.0.0.0');
+
+  // Log direto (sem usar getUrl para não confundir)
+  console.log(`🚀 Servidor pronto na porta ${port} aceitando conexões de 0.0.0.0`);
 }
-// eslint-disable-next-line @typescript-eslint/no-floating-promises
-bootstrap();
+
+bootstrap().catch(err => {
+  console.error("Erro ao subir o servidor:", err);
+});
