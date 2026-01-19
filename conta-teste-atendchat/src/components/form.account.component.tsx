@@ -2,6 +2,7 @@ import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
+import Link from '@mui/material/Link';
 import { useState } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -173,6 +174,13 @@ function FormFlowAccountUser() {
 
     if (response.ok) {
       toast.success("Cadastro finalizado! Verifique seu WhatsApp.");
+
+      setFormData(prev => ({
+    ...prev,
+    password: '',
+    confirmPassword: ''
+  }));
+
     } else {
       const error = await response.json();
       toast.error("Erro no Passo 2: " + (error.message || "Erro ao criar usuário"));
@@ -289,10 +297,18 @@ function FormFlowAccountUser() {
       
       {/* Footer com Aviso Legal */}
       <Box sx={{ textAlign: 'center', mt: 4 }}>
-        <Typography variant="caption" color="text.secondary">
-            Ao clicar em Finalizar, você aceita os Termos de Uso.
-        </Typography>
-      </Box>
+  <Typography variant="caption" color="text.secondary">
+    Ao clicar em Finalizar, você aceita os{' '}
+    <Link 
+      href="https://hotmobile.com.br/hot360/termosdeuso/" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      sx={{ cursor: 'pointer', textDecoration: 'underline' }}
+    >
+      Termos de Uso
+    </Link>.
+  </Typography>
+</Box>
 
     </Box>
   );
