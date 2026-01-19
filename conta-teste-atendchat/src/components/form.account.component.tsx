@@ -104,48 +104,36 @@ function FormFlowAccountUser() {
     // 2. PREPARA O PAYLOAD PARA O NESTJS
     // Note que agora enviamos os nomes que definimos no DTO do NestJS
     // Não precisa mais converter para 'domain', 'locale', etc. O Back faz isso.
-   const nestPayload = {
-      accountId: Number(createdAccountId),
-      name: formData.responsavel,
-      email: formData.mail,
-      password: formData.password,
-      
-      // ADICIONE ESTAS DUAS LINHAS ABAIXO:
-      empresa: formData.empresa,
-      telefone: formData.celular || formData.telefone 
+  const nestPayload = {
+    empresa: formData.empresa,
+    mail: formData.mail, // O Backend espera 'mail', não 'email'
+    responsavel: formData.responsavel,
+    telefone: formData.telefone,
+    celular: formData.celular
   };
 
-    try {
-      // 3. CHAMA O SEU BACKEND (NESTJS)
-      const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // REMOVIDO: 'api_access_token' (Segurança total!)
-        },
-        body: JSON.stringify(nestPayload)
-      });
+  try {
+    const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nestPayload)
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Conta criada via NestJS. ID:", data.id);
-        
-        setCreatedAccountId(data.id); // Salva o ID retornado pelo Nest->Hotmobile
-        setActiveStep(1); // Avança para a etapa de criar usuário
-        toast.success("Conta criada! Agora defina a senha de acesso.");
-        
-      } else {
-        // Tratamento de erro vindo do NestJS
-        const error = await response.json();
-        // O Nest costuma devolver { message: "...", statusCode: ... }
-        toast.error("Erro: " + (error.message || "Falha ao criar conta."));
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro de conexão com o Backend local.");
-    } finally {
-      setLoading(false);
+    if (response.ok) {
+      const data = await response.json();
+      setCreatedAccountId(data.id); 
+      setActiveStep(1); 
+      toast.success("Conta criada! Agora defina a senha.");
+    } else {
+      const error = await response.json();
+      // Se o erro persistir, verifique se no DTO a palavra é 'mail' ou 'email'
+      toast.error("Erro no Passo 1: " + (error.message || "Erro desconhecido"));
     }
+  } catch (err) {
+    toast.error("Erro de conexão.");
+  } finally {
+    setLoading(false);
+  }
   };
 
   // --- LÓGICA DO PASSO 2: CRIAR USUÁRIO E VINCULAR ---
@@ -167,40 +155,33 @@ function FormFlowAccountUser() {
     setLoading(true);
 
     // 2. Payload Ajustado (Sem role, pois isso é no próximo passo)
-    const userPayload = {
-        accountId: createdAccountId,
-        name: formData.responsavel,
-        email: formData.mail,
-        password: formData.password
-        // role: "administrator" <--- REMOVIDO (Isso vai no Passo 3)
-    };
+   const userPayload = {
+      accountId: Number(createdAccountId),
+      name: formData.responsavel,
+      email: formData.mail,
+      password: formData.password,
+      empresa: formData.empresa, // Novo campo exigido
+      telefone: formData.celular || formData.telefone // Novo campo exigido
+  };
 
-    try {
-      // Chama a mesma rota de antes, mas agora o Backend faz o serviço completo
-      const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userPayload)
-      });
+  try {
+    const response = await fetch('https://form-conta-teste-atendchat-hotmobile-production.up.railway.app/account/user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userPayload)
+    });
 
-      if (response.ok) {
-        // SUCESSO TOTAL!
-        toast.success("Conta e Usuário Admin configurados!");
-        toast.info("Você já pode fazer login.");
-        
-       
-        
-      } else {
-        const error = await response.json();
-        toast.error("Erro: " + (error.message || "Falha ao finalizar cadastro."));
-      }
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro de conexão.");
-    } finally {
-      setLoading(false);
+    if (response.ok) {
+      toast.success("Cadastro finalizado! Verifique seu WhatsApp.");
+    } else {
+      const error = await response.json();
+      toast.error("Erro no Passo 2: " + (error.message || "Erro ao criar usuário"));
     }
+  } catch (err) {
+    toast.error("Erro de conexão.");
+  } finally {
+    setLoading(false);
+  }
   };
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto' }}>

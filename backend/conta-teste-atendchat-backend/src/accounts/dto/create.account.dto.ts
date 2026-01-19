@@ -18,7 +18,7 @@ export class CreateAccountDto {
 
   @IsOptional()
   @IsString()
-  responssavel?: string;
+  responsavel?: string;
 
   @IsOptional()
   @IsString()
