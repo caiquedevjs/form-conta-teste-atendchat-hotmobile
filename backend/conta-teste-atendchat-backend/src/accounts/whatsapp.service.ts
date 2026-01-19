@@ -1,34 +1,24 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
 
-  // DICA: O ideal seria mover essas credenciais para o .env no futuro
-  private apiUrl = 'https://api.hotmobile.com.br/Whatsapp/EnviarMensagem';
-  private apiUser = 'caique.menezes@hotmobile.com.br';
-  private apiPass = 'OCai123@';
-  private instanciaId = 10;
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {}
 
-  constructor(private readonly httpService: HttpService) {}
+  async enviarMensagem(telefone: string, texto: string) {
+    const apiUrl = this.configService.getOrThrow<string>('HOTMOBILE_API_URL');
+    const user = this.configService.getOrThrow<string>('HOTMOBILE_API_USER');
+    const pass = this.configService.getOrThrow<string>('HOTMOBILE_API_PASS');
+    const instanciaId = Number(this.configService.getOrThrow<string>('HOTMOBILE_INSTANCIA_ID'));
 
-  // Método para enviar para um número específico
-  async enviarNotificacaoAdmin(mensagem: string) {
-    // Defina aqui o número que receberá o aviso (Ex: Seu número ou do Gerente)
-    // Pode vir do .env também: process.env.ADMIN_WHATSAPP_NUMBER
-    const numeroAdmin = '120363419466650313'; // <--- COLOQUE O NÚMERO DE DESTINO AQUI
-
-    return this.enviarMensagemBase(numeroAdmin, mensagem);
-  }
-
-  async enviarMensagem(telefone: string, mensagem: string) {
-    return this.enviarMensagemBase(telefone, mensagem);
-  }
-
-  private async enviarMensagemBase(telefone: string, texto: string) {
+    // Limpa o número e garante o prefixo do Brasil (55)
     let numeroLimpo = telefone.replace(/\D/g, '');
     if (numeroLimpo.length <= 11) {
       numeroLimpo = '55' + numeroLimpo;
@@ -36,27 +26,25 @@ export class WhatsappService {
 
     const payload = {
       mensagem: texto,
-      instanciaId: this.instanciaId,
-      listNumeros: [{ numero: numeroLimpo }],
+      instanciaId: instanciaId,
+      listNumeros: [{ numero: numeroLimpo }]
     };
 
     try {
-      this.logger.debug(`📞 Enviando Zap para ${numeroLimpo}...`);
-
-      // Basic Auth Header Manualmente construído ou via config do Axios
-      // A API da Hotmobile parece usar Basic Auth padrão
+      this.logger.debug(`📞 Enviando WhatsApp para ${numeroLimpo}...`);
+      
       const response = await firstValueFrom(
-        this.httpService.post(this.apiUrl, payload, {
-          auth: {
-            username: this.apiUser,
-            password: this.apiPass,
-          },
+        this.httpService.post(apiUrl, payload, {
+          auth: { username: user, password: pass },
           headers: { 'Content-Type': 'application/json' },
-        }),
+        })
       );
-      this.logger.log(`✅ WhatsApp enviado! Status: ${response.status}`);
+
+      this.logger.log(`✅ WhatsApp enviado com sucesso! Status: ${response.status}`);
+      return response.data;
     } catch (error) {
-      this.logger.error(`❌ Erro Zap: ${error.message}`, error.response?.data);
+      this.logger.error(`❌ Erro ao enviar WhatsApp: ${error.message}`, error.response?.data);
+      // Não lançamos erro aqui para não travar o fluxo principal de criação de conta
     }
   }
 }
