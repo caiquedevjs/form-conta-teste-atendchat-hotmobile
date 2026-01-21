@@ -109,7 +109,7 @@ export class createAccountService {
       // Notificação E-mail
       const assuntoEmail = '🚀 Sua conta Hotmobile está pronta!';
       const msgEmail = `Olá ${empresa}, sua conta foi configurada com sucesso. Você já pode acessar a plataforma utilizando o e-mail: ${data.email}.`;
-      await this.mailService.enviarNotificacaoGenerica(data.email, assuntoEmail, msgEmail, linkAcesso);
+      await this.mailService.enviarMailChimp(data.email, assuntoEmail, msgEmail, linkAcesso);
 
       return {
         success: true,
