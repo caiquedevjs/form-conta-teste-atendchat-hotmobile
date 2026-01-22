@@ -62,7 +62,7 @@ export class MailService implements OnModuleInit {
       // Usamos a instância inicializada no onModuleInit
       const response = await this.mailchimp.messages.send({
         message: {
-          from_email: "contato@hotmobile.com.br",
+          from_email: "contato@enviaemail.com.br",
           from_name: "Suporte Hotmobile",
           subject: assunto,
           html: corpoHtml,
