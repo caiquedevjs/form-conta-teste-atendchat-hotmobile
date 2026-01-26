@@ -20,25 +20,23 @@ export class createAccountService {
   ) {}
 
   async createChatWhootAccount(data: CreateAccountDto) {
-    const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
+    const apiUrl = this.configService.get<string>('CHATWOOT_API_URL'); 
     const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
 
     try {
-      this.logger.log(`Iniciando criação de conta Master: ${data.empresa}`);
+      this.logger.log(`[PASSO 1] Criando conta Master: ${data.empresa}`);
       const { data: responseData } = await lastValueFrom(
         this.httpService.post(`${apiUrl}/accounts`, {
           name: data.empresa,
           locale: 'pt_BR',
-          domain: data.mail,
-          support_email: data.mail,
         }, {
           headers: { api_access_token: token },
         }),
       );
       return responseData;
     } catch (error) {
-      this.logger.error('Erro ao criar conta', error.response?.data);
-      throw new HttpException('Falha ao criar conta externa', HttpStatus.BAD_REQUEST);
+      this.logger.error('Erro ao criar conta no Chatwoot', error.response?.data);
+      throw new HttpException('Falha ao criar conta master.', HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -48,9 +46,9 @@ export class createAccountService {
 
     let userId: number;
 
-    // --- PASSO 1: TENTAR CRIAR OU LOCALIZAR ---
+    // --- PASSO 1: CRIAR OU LOCALIZAR USUÁRIO ---
     try {
-      this.logger.log(`Tentando criar usuário: ${data.email}`);
+      this.logger.log(`[PASSO 2] Tentando criar usuário: ${data.email}`);
       const { data: userResponse } = await lastValueFrom(
         this.httpService.post(`${apiUrl}/users`, {
           name: data.name,
@@ -63,47 +61,45 @@ export class createAccountService {
       userId = userResponse.id;
     } catch (error) {
       if (error.response?.status === 422) {
-        this.logger.warn(`Conflito: Usuário ${data.email} já existe. Iniciando varredura...`);
+        this.logger.warn(`E-mail ${data.email} já existe. Iniciando busca profunda...`);
         
         try {
-          // Buscamos a lista (aqui está o ajuste para lidar com diferentes formatos)
-          const response = await lastValueFrom(
+          // Busca em todas as páginas se necessário ou via filtro
+          // A Platform API costuma retornar uma lista. Vamos varrer as primeiras páginas.
+          const searchResponse = await lastValueFrom(
             this.httpService.get(`${apiUrl}/users`, {
               headers: { api_access_token: token },
             })
           );
 
-          // O Chatwoot pode retornar a lista direto ou dentro de 'data' ou 'payload'
-          const rawData = response.data;
+          // Lógica para extrair a lista independente do formato
+          const rawData = searchResponse.data;
           const usersList = Array.isArray(rawData) ? rawData : (rawData.data || rawData.payload || []);
           
-          this.logger.debug(`Total de usuários recuperados para busca: ${usersList.length}`);
+          const foundUser = usersList.find((u: any) => u.email.toLowerCase() === data.email.toLowerCase());
 
-          // Busca ignorando maiúsculas/minúsculas
-          const existingUser = usersList.find((u: any) => 
-            u.email.toLowerCase() === data.email.toLowerCase()
-          );
-
-          if (!existingUser) {
-             this.logger.error(`E-mail ${data.email} deu erro 422 mas não aparece na lista de usuários da plataforma.`);
-             throw new Error('User missing from platform list');
+          if (foundUser) {
+            userId = foundUser.id;
+            this.logger.log(`Usuário localizado com sucesso! ID: ${userId}`);
+          } else {
+            // Se não achou na primeira página, o usuário pode estar em outra página ou o token não tem visão global
+            this.logger.error(`O usuário ${data.email} existe (erro 422), mas o seu Token de Plataforma não permitiu localizá-lo na lista.`);
+            throw new Error('User exists but is invisible to this token');
           }
-
-          userId = existingUser.id;
-          this.logger.log(`ID recuperado com sucesso: ${userId}`);
-        } catch (searchError) {
-          this.logger.error('Erro crítico na busca de usuário', searchError.message);
-          throw new HttpException('Este e-mail pertence a um usuário global que você não tem permissão para vincular.', HttpStatus.CONFLICT);
+        } catch (e) {
+          throw new HttpException(
+            'Este e-mail já está em uso em outra conta e seu token não tem permissão para vinculá-lo.',
+            HttpStatus.CONFLICT
+          );
         }
       } else {
-        this.logger.error('Erro desconhecido ao criar usuário', error.response?.data);
         throw new HttpException('Falha ao processar usuário', HttpStatus.BAD_REQUEST);
       }
     }
 
     // --- PASSO 2: VINCULAR À CONTA ---
     try {
-      this.logger.log(`Vinculando ID ${userId} na conta ${data.accountId}...`);
+      this.logger.log(`[PASSO 3] Vinculando ID ${userId} à conta ${data.accountId}`);
       await lastValueFrom(
         this.httpService.post(
           `${apiUrl}/accounts/${data.accountId}/account_users`,
@@ -112,25 +108,32 @@ export class createAccountService {
         ),
       );
 
-      // --- PASSO 3: NOTIFICAÇÕES ---
+      // --- PASSO 4: NOTIFICAÇÕES ---
       const linkAcesso = 'https://chat.hotmobile.com.br';
       
-      this.logger.debug('Enviando notificações...');
-      await this.whatsappService.enviarMensagem(telefone, `Olá *${empresa}*! Sua conta Hotmobile está pronta. Acesse: ${linkAcesso}`);
-      await this.mailService.enviarMailChimp(data.email, '🚀 Sua conta Hotmobile está pronta!', `Olá ${empresa}, seu acesso: ${data.email}`, linkAcesso);
+      this.logger.log(`[PASSO 4] Disparando notificações para ${data.email}`);
+      
+      // WhatsApp (Tratamos erros individualmente para não quebrar o fluxo)
+      try {
+        await this.whatsappService.enviarMensagem(telefone, `Olá *${empresa}*! Sua conta Hotmobile está pronta. Acesse: ${linkAcesso}`);
+      } catch (e) { this.logger.error('Falha ao enviar WhatsApp'); }
 
-      this.logger.log(`✅ Processo finalizado para ${data.email}`);
-      return { success: true, user: { id: userId, email: data.email } };
+      // Mailchimp
+      try {
+        await this.mailService.enviarMailChimp(data.email, '🚀 Sua conta Hotmobile está pronta!', `Login: ${data.email}`, linkAcesso);
+      } catch (e) { this.logger.error('Falha ao enviar Mailchimp'); }
+
+      return { success: true, userId };
 
     } catch (error) {
-      // Caso o usuário já esteja vinculado, tratamos como sucesso
-      const errorMsg = JSON.stringify(error.response?.data || '');
-      if (errorMsg.includes('already exists') || errorMsg.includes('taken')) {
-        this.logger.log('Usuário já estava vinculado a esta conta. Seguindo...');
-        return { success: true, message: 'Já vinculado' };
+      const errorData = error.response?.data;
+      // Se o erro for que o usuário já é admin da conta, consideramos sucesso
+      if (JSON.stringify(errorData).includes('already exists')) {
+        this.logger.log('Usuário já era administrador desta conta.');
+        return { success: true, userId };
       }
-
-      this.logger.error('Erro final no vínculo', error.response?.data);
+      
+      this.logger.error('Erro no vínculo final', errorData);
       throw new HttpException('Erro ao vincular usuário à conta master.', HttpStatus.BAD_REQUEST);
     }
   }
