@@ -19,45 +19,36 @@ export class createAccountService {
     private readonly mailService: MailService,
   ) {}
 
-  /**
-   * 1. CRIA A CONTA MASTER NA PLATAFORMA
-   */
   async createChatWhootAccount(data: CreateAccountDto) {
-    const apiUrl = this.configService.get<string>('CHATWOOT_API_URL'); // URL da Platform API
+    const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
     const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
 
-    const payload = {
-      name: data.empresa,
-      locale: 'pt_BR',
-      domain: data.mail,
-      support_email: data.mail,
-      status: 'active',
-    };
-
     try {
-      this.logger.log(`Iniciando criação de conta Master para: ${data.empresa}`);
+      this.logger.log(`Iniciando criação de conta Master: ${data.empresa}`);
       const { data: responseData } = await lastValueFrom(
-        this.httpService.post(`${apiUrl}/accounts`, payload, {
+        this.httpService.post(`${apiUrl}/accounts`, {
+          name: data.empresa,
+          locale: 'pt_BR',
+          domain: data.mail,
+          support_email: data.mail,
+        }, {
           headers: { api_access_token: token },
         }),
       );
       return responseData;
     } catch (error) {
-      this.logger.error('Erro ao criar conta na plataforma Chatwoot', error.response?.data);
-      throw new HttpException('Falha ao criar conta na plataforma externa', HttpStatus.BAD_REQUEST);
+      this.logger.error('Erro ao criar conta', error.response?.data);
+      throw new HttpException('Falha ao criar conta externa', HttpStatus.BAD_REQUEST);
     }
   }
 
-  /**
-   * 2. CRIA OU LOCALIZA O USUÁRIO E VINCULA À CONTA
-   */
   async createChatwootUser(data: CreateUserDto, empresa: string, telefone: string) {
     const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
     const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
 
     let userId: number;
 
-    // --- PASSO 1: TENTAR CRIAR O USUÁRIO NA PLATAFORMA ---
+    // --- PASSO 1: TENTAR CRIAR OU LOCALIZAR ---
     try {
       this.logger.log(`Tentando criar usuário: ${data.email}`);
       const { data: userResponse } = await lastValueFrom(
@@ -71,39 +62,48 @@ export class createAccountService {
       );
       userId = userResponse.id;
     } catch (error) {
-      // Se o erro for 422, o usuário já existe na plataforma global
       if (error.response?.status === 422) {
-        this.logger.warn(`Usuário ${data.email} já existe. Buscando ID existente...`);
+        this.logger.warn(`Conflito: Usuário ${data.email} já existe. Iniciando varredura...`);
         
         try {
-          // BUSCAR USUÁRIO EXISTENTE PARA PEGAR O ID
-          const { data: usersList } = await lastValueFrom(
+          // Buscamos a lista (aqui está o ajuste para lidar com diferentes formatos)
+          const response = await lastValueFrom(
             this.httpService.get(`${apiUrl}/users`, {
               headers: { api_access_token: token },
             })
           );
+
+          // O Chatwoot pode retornar a lista direto ou dentro de 'data' ou 'payload'
+          const rawData = response.data;
+          const usersList = Array.isArray(rawData) ? rawData : (rawData.data || rawData.payload || []);
           
-          const existingUser = usersList.find((u: any) => u.email === data.email);
-          
+          this.logger.debug(`Total de usuários recuperados para busca: ${usersList.length}`);
+
+          // Busca ignorando maiúsculas/minúsculas
+          const existingUser = usersList.find((u: any) => 
+            u.email.toLowerCase() === data.email.toLowerCase()
+          );
+
           if (!existingUser) {
-            throw new Error('Usuário não encontrado na lista apesar do erro 422');
+             this.logger.error(`E-mail ${data.email} deu erro 422 mas não aparece na lista de usuários da plataforma.`);
+             throw new Error('User missing from platform list');
           }
-          
+
           userId = existingUser.id;
-          this.logger.log(`ID do usuário existente localizado: ${userId}`);
+          this.logger.log(`ID recuperado com sucesso: ${userId}`);
         } catch (searchError) {
-          this.logger.error('Não foi possível localizar o usuário existente', searchError.message);
-          throw new HttpException('Usuário já existe, mas não foi possível vincular.', HttpStatus.CONFLICT);
+          this.logger.error('Erro crítico na busca de usuário', searchError.message);
+          throw new HttpException('Este e-mail pertence a um usuário global que você não tem permissão para vincular.', HttpStatus.CONFLICT);
         }
       } else {
-        throw new HttpException('Falha ao criar usuário na plataforma', HttpStatus.BAD_REQUEST);
+        this.logger.error('Erro desconhecido ao criar usuário', error.response?.data);
+        throw new HttpException('Falha ao processar usuário', HttpStatus.BAD_REQUEST);
       }
     }
 
-    // --- PASSO 2: VINCULAR O USUÁRIO À CONTA ESPECÍFICA ---
+    // --- PASSO 2: VINCULAR À CONTA ---
     try {
-      this.logger.log(`Vinculando usuário ID ${userId} na conta ${data.accountId}...`);
-      
+      this.logger.log(`Vinculando ID ${userId} na conta ${data.accountId}...`);
       await lastValueFrom(
         this.httpService.post(
           `${apiUrl}/accounts/${data.accountId}/account_users`,
@@ -112,35 +112,26 @@ export class createAccountService {
         ),
       );
 
-      // --- PASSO 3: DISPARAR NOTIFICAÇÕES ---
+      // --- PASSO 3: NOTIFICAÇÕES ---
       const linkAcesso = 'https://chat.hotmobile.com.br';
       
-      // WhatsApp
-      const msgZap = `Olá *${empresa}*! 👋\n\nSua conta na plataforma *Hotmobile* foi configurada com sucesso!\n\n📧 *Login:* ${data.email}\n🔐 *Senha:* (A definida no formulário)\n\n🔗 Acesse agora:\n${linkAcesso}`;
-      await this.whatsappService.enviarMensagem(telefone, msgZap);
+      this.logger.debug('Enviando notificações...');
+      await this.whatsappService.enviarMensagem(telefone, `Olá *${empresa}*! Sua conta Hotmobile está pronta. Acesse: ${linkAcesso}`);
+      await this.mailService.enviarMailChimp(data.email, '🚀 Sua conta Hotmobile está pronta!', `Olá ${empresa}, seu acesso: ${data.email}`, linkAcesso);
 
-      // E-mail (Mailchimp)
-      const assuntoEmail = '🚀 Sua conta Hotmobile está pronta!';
-      const msgEmail = `Olá ${empresa}, sua conta foi configurada com sucesso. Você já pode acessar a plataforma utilizando o e-mail: ${data.email}.`;
-      await this.mailService.enviarMailChimp(data.email, assuntoEmail, msgEmail, linkAcesso);
+      this.logger.log(`✅ Processo finalizado para ${data.email}`);
+      return { success: true, user: { id: userId, email: data.email } };
 
-      this.logger.log(`✅ Processo concluído com sucesso para ${data.email}`);
-      
-      return {
-        success: true,
-        message: 'Conta ativada e notificações enviadas!',
-        user: { id: userId, email: data.email },
-      };
-      
     } catch (error) {
-      this.logger.error('Erro no vínculo ou notificações', error.response?.data);
-      
-      // Caso o erro de vínculo seja porque ele já é admin daquela conta específica
-      if (error.response?.data?.message?.includes('already exists')) {
-          return { success: true, message: 'Usuário já estava ativo nesta conta.' };
+      // Caso o usuário já esteja vinculado, tratamos como sucesso
+      const errorMsg = JSON.stringify(error.response?.data || '');
+      if (errorMsg.includes('already exists') || errorMsg.includes('taken')) {
+        this.logger.log('Usuário já estava vinculado a esta conta. Seguindo...');
+        return { success: true, message: 'Já vinculado' };
       }
 
-      throw new HttpException('Erro ao finalizar o processo de ativação.', HttpStatus.BAD_REQUEST);
+      this.logger.error('Erro final no vínculo', error.response?.data);
+      throw new HttpException('Erro ao vincular usuário à conta master.', HttpStatus.BAD_REQUEST);
     }
   }
 }
