@@ -40,13 +40,46 @@ export class createAccountService {
     }
   }
 
+  // Função auxiliar para buscar o ID do usuário em todas as páginas da plataforma
+  private async findUserIdByEmail(email: string, page = 1): Promise<number | null> {
+    const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
+    const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
+
+    try {
+      this.logger.debug(`Buscando e-mail na página ${page} da plataforma...`);
+      const response = await lastValueFrom(
+        this.httpService.get(`${apiUrl}/users`, {
+          params: { page },
+          headers: { api_access_token: token },
+        })
+      );
+
+      const users = response.data;
+      
+      if (!users || users.length === 0) return null;
+
+      const found = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+      if (found) return found.id;
+
+      // Se não achou nesta página e a página veio cheia (25 itens), busca na próxima
+      if (users.length === 25) {
+        return await this.findUserIdByEmail(email, page + 1);
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.error(`Erro ao listar usuários na página ${page}`, error.message);
+      return null;
+    }
+  }
+
   async createChatwootUser(data: CreateUserDto, empresa: string, telefone: string) {
     const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
     const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
 
-    let userId: number;
+ let userId: number | null = null;
 
-    // --- PASSO 1: CRIAR OU LOCALIZAR USUÁRIO ---
+    // --- PASSO 1: TENTAR CRIAR OU LOCALIZAR ---
     try {
       this.logger.log(`[PASSO 2] Tentando criar usuário: ${data.email}`);
       const { data: userResponse } = await lastValueFrom(
@@ -61,39 +94,20 @@ export class createAccountService {
       userId = userResponse.id;
     } catch (error) {
       if (error.response?.status === 422) {
-        this.logger.warn(`E-mail ${data.email} já existe. Iniciando busca profunda...`);
+        this.logger.warn(`Conflito: E-mail ${data.email} já existe. Iniciando busca paginada...`);
         
-        try {
-          // Busca em todas as páginas se necessário ou via filtro
-          // A Platform API costuma retornar uma lista. Vamos varrer as primeiras páginas.
-          const searchResponse = await lastValueFrom(
-            this.httpService.get(`${apiUrl}/users`, {
-              headers: { api_access_token: token },
-            })
-          );
+        userId = await this.findUserIdByEmail(data.email);
 
-          // Lógica para extrair a lista independente do formato
-          const rawData = searchResponse.data;
-          const usersList = Array.isArray(rawData) ? rawData : (rawData.data || rawData.payload || []);
-          
-          const foundUser = usersList.find((u: any) => u.email.toLowerCase() === data.email.toLowerCase());
-
-          if (foundUser) {
-            userId = foundUser.id;
-            this.logger.log(`Usuário localizado com sucesso! ID: ${userId}`);
-          } else {
-            // Se não achou na primeira página, o usuário pode estar em outra página ou o token não tem visão global
-            this.logger.error(`O usuário ${data.email} existe (erro 422), mas o seu Token de Plataforma não permitiu localizá-lo na lista.`);
-            throw new Error('User exists but is invisible to this token');
-          }
-        } catch (e) {
+        if (!userId) {
+          this.logger.error(`Usuário ${data.email} não foi encontrado em nenhuma página.`);
           throw new HttpException(
-            'Este e-mail já está em uso em outra conta e seu token não tem permissão para vinculá-lo.',
+            'Este e-mail já existe mas não foi localizado na sua lista de usuários. Verifique as permissões do seu Token.',
             HttpStatus.CONFLICT
           );
         }
+        this.logger.log(`Usuário localizado via busca paginada! ID: ${userId}`);
       } else {
-        throw new HttpException('Falha ao processar usuário', HttpStatus.BAD_REQUEST);
+        throw new HttpException('Falha ao processar criação de usuário.', HttpStatus.BAD_REQUEST);
       }
     }
 
@@ -108,33 +122,30 @@ export class createAccountService {
         ),
       );
 
-      // --- PASSO 4: NOTIFICAÇÕES ---
+      // --- PASSO 3: NOTIFICAÇÕES ---
       const linkAcesso = 'https://chat.hotmobile.com.br';
       
-      this.logger.log(`[PASSO 4] Disparando notificações para ${data.email}`);
-      
-      // WhatsApp (Tratamos erros individualmente para não quebrar o fluxo)
       try {
         await this.whatsappService.enviarMensagem(telefone, `Olá *${empresa}*! Sua conta Hotmobile está pronta. Acesse: ${linkAcesso}`);
-      } catch (e) { this.logger.error('Falha ao enviar WhatsApp'); }
+        this.logger.log('WhatsApp enviado.');
+      } catch (e) { this.logger.error('Erro WhatsApp'); }
 
-      // Mailchimp
       try {
         await this.mailService.enviarMailChimp(data.email, '🚀 Sua conta Hotmobile está pronta!', `Login: ${data.email}`, linkAcesso);
-      } catch (e) { this.logger.error('Falha ao enviar Mailchimp'); }
+        this.logger.log('E-mail enviado.');
+      } catch (e) { this.logger.error('Erro Mailchimp'); }
 
       return { success: true, userId };
 
     } catch (error) {
-      const errorData = error.response?.data;
-      // Se o erro for que o usuário já é admin da conta, consideramos sucesso
-      if (JSON.stringify(errorData).includes('already exists')) {
-        this.logger.log('Usuário já era administrador desta conta.');
+      const errorData = JSON.stringify(error.response?.data || '');
+      if (errorData.includes('already exists') || errorData.includes('taken')) {
+        this.logger.log('Usuário já era administrador desta conta. Finalizando com sucesso.');
         return { success: true, userId };
       }
       
-      this.logger.error('Erro no vínculo final', errorData);
-      throw new HttpException('Erro ao vincular usuário à conta master.', HttpStatus.BAD_REQUEST);
+      this.logger.error('Erro no vínculo final', error.response?.data);
+      throw new HttpException('Erro ao vincular usuário à conta.', HttpStatus.BAD_REQUEST);
     }
   }
 }
