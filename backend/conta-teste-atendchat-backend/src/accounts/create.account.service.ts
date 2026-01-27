@@ -40,13 +40,11 @@ export class createAccountService {
     }
   }
 
-  // Função auxiliar para buscar o ID do usuário em todas as páginas da plataforma
   private async findUserIdByEmail(email: string, page = 1): Promise<number | null> {
     const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
     const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
 
     try {
-      this.logger.debug(`Buscando e-mail na página ${page} da plataforma...`);
       const response = await lastValueFrom(
         this.httpService.get(`${apiUrl}/users`, {
           params: { page },
@@ -55,13 +53,11 @@ export class createAccountService {
       );
 
       const users = response.data;
-      
       if (!users || users.length === 0) return null;
 
       const found = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
       if (found) return found.id;
 
-      // Se não achou nesta página e a página veio cheia (25 itens), busca na próxima
       if (users.length === 25) {
         return await this.findUserIdByEmail(email, page + 1);
       }
@@ -77,7 +73,7 @@ export class createAccountService {
     const apiUrl = this.configService.get<string>('CHATWOOT_API_URL');
     const token = this.configService.get<string>('CHATWOOT_ACCESS_TOKEN');
 
- let userId: number | null = null;
+    let userId: number | null = null;
 
     // --- PASSO 1: TENTAR CRIAR OU LOCALIZAR ---
     try {
@@ -94,21 +90,20 @@ export class createAccountService {
       userId = userResponse.id;
     } catch (error) {
       if (error.response?.status === 422) {
-        this.logger.warn(`Conflito: E-mail ${data.email} já existe. Iniciando busca paginada...`);
-        
+        this.logger.warn(`Conflito: E-mail ${data.email} já existe. Iniciando busca...`);
         userId = await this.findUserIdByEmail(data.email);
 
         if (!userId) {
-          this.logger.error(`Usuário ${data.email} não foi encontrado em nenhuma página.`);
-          throw new HttpException(
-            'Este e-mail já existe mas não foi localizado na sua lista de usuários. Verifique as permissões do seu Token.',
-            HttpStatus.CONFLICT
-          );
+          throw new HttpException('E-mail já existe mas não foi localizado.', HttpStatus.CONFLICT);
         }
-        this.logger.log(`Usuário localizado via busca paginada! ID: ${userId}`);
       } else {
         throw new HttpException('Falha ao processar criação de usuário.', HttpStatus.BAD_REQUEST);
       }
+    }
+
+    // Validação de segurança para o TypeScript
+    if (userId === null) {
+      throw new HttpException('ID do usuário não definido.', HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     // --- PASSO 2: VINCULAR À CONTA ---
@@ -122,16 +117,36 @@ export class createAccountService {
         ),
       );
 
-      // --- PASSO 3: NOTIFICAÇÕES ---
+      // --- PASSO 3: NOTIFICAÇÕES COM CREDENCIAIS ---
       const linkAcesso = 'https://chat.hotmobile.com.br';
       
+      // WhatsApp formatado
+      const mensagemWhatsapp = 
+        `Olá *${empresa}*! 👋\n\n` +
+        `Sua conta na plataforma *Hotmobile* foi configurada com sucesso!\n\n` +
+        `🔐 *Credenciais de acesso:*\n` +
+        `📧 *Login:* ${data.email}\n` +
+        `🔑 *Senha:* ${data.password}\n\n` +
+        `🔗 *Acesse agora:* ${linkAcesso}`;
+
       try {
-        await this.whatsappService.enviarMensagem(telefone, `Olá *${empresa}*! Sua conta Hotmobile está pronta. Acesse: ${linkAcesso}`);
+        await this.whatsappService.enviarMensagem(telefone, mensagemWhatsapp);
         this.logger.log('WhatsApp enviado.');
       } catch (e) { this.logger.error('Erro WhatsApp'); }
 
+      // E-mail formatado
+      const mensagemEmail = 
+        `Sua conta foi configurada com sucesso. Utilize os dados abaixo para acessar:\n\n` +
+        `Login: ${data.email}\n` +
+        `Senha: ${data.password}`;
+
       try {
-        await this.mailService.enviarMailChimp(data.email, '🚀 Sua conta Hotmobile está pronta!', `Login: ${data.email}`, linkAcesso);
+        await this.mailService.enviarMailChimp(
+          data.email, 
+          '🚀 Sua conta Hotmobile está pronta!', 
+          mensagemEmail, 
+          linkAcesso
+        );
         this.logger.log('E-mail enviado.');
       } catch (e) { this.logger.error('Erro Mailchimp'); }
 
@@ -140,11 +155,8 @@ export class createAccountService {
     } catch (error) {
       const errorData = JSON.stringify(error.response?.data || '');
       if (errorData.includes('already exists') || errorData.includes('taken')) {
-        this.logger.log('Usuário já era administrador desta conta. Finalizando com sucesso.');
         return { success: true, userId };
       }
-      
-      this.logger.error('Erro no vínculo final', error.response?.data);
       throw new HttpException('Erro ao vincular usuário à conta.', HttpStatus.BAD_REQUEST);
     }
   }
